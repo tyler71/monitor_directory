@@ -18,17 +18,20 @@ def main():
     args = parser.parse_args()
 
     temp_file = args.temp_file
+    args.directories = [dir.rstrip('/') for dir in args.directories]
+    args.directories = [os.path.abspath(dir) for dir in args.directories]
     if os.path.isfile(temp_file):
         with open(temp_file) as f:
             cached_directories = json.load(f)
-        cached_directories = process_cached(cached_directories, args.directories)
-        write_json_file(cached_directories, temp_file)
+        result = process_cached(cached_directories, args.directories)
+        if result:
+            write_json_file(cached_directories, temp_file)
 
     else:
         cached_directories = dict()
-        cached_directories = process_non_cached(cached_directories, args.directories)
-        write_json_file(cached_directories, temp_file)
-    print(cached_directories)
+        result = process_non_cached(cached_directories, args.directories)
+        if result:
+            write_json_file(cached_directories, temp_file)
 
 
 def write_json_file(dictionary, temp_file):
@@ -44,13 +47,12 @@ def write_json_file(dictionary, temp_file):
 def process_non_cached(cache_dictionary, directories):
     for directory in directories:
         cache_dictionary[directory] = [os.stat(directory).st_mtime, set()]
-        cached_processed_files = cache_dictionary[directory][1]
-        directory_files = (f for f in os.listdir(directory) if os.path.isfile(f))
+        directory_files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
         for file in directory_files:
             print("processing non cached", file)
-            cached_processed_files.add(file)
+            cache_dictionary[directory][1].add(file)
             # TODO; add processing of file
-    return cache_dictionary
+    return True
 
 
 def process_cached(cache_dictionary, directories):
@@ -59,17 +61,27 @@ def process_cached(cache_dictionary, directories):
         cache_dictionary[directory][1] = set(cache_dictionary[directory][1])
     for directory in directories:
         if directory in cache_dictionary:
-            cached_processed_files = cache_dictionary[directory][1]
             cached_directory_time = cache_dictionary[directory][0]
             current_directory_time = os.stat(directory).st_mtime
             if current_directory_time > cached_directory_time:
-                directory_files = (f for f in os.listdir(directory) if os.path.isfile(f))
+                print("directory has been updated")
+                directory_files = (f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f)))
+                cache_dictionary[directory][0] = current_directory_time
                 for file in directory_files:
-                    print("processing cached", file)
-                    if file not in cached_processed_files:
+                    if file not in cache_dictionary[directory][1]:
                         print("processing non cached", file)
-                        cached_processed_files.add(file)
-    return cache_dictionary
+                        cache_dictionary[directory][1].add(file)
+                    else:
+                        print("Already processed, ignoring")
+                return True
+        else:
+            cache_dictionary[directory] = [os.stat(directory).st_mtime, set()]
+            directory_files = (f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f)))
+            for file in directory_files:
+                print("processing non cached", file)
+                cache_dictionary[directory][1].add(file)
+                # TODO; add processing of file
+            return True
 
 
 if __name__ == '__main__':
