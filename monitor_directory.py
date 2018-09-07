@@ -5,12 +5,17 @@ import os
 import argparse
 import tempfile
 import json
+import time
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-d", "--daemon",
+                        action="store_true",
+                        )
     parser.add_argument("--temp-file",
-                        default=os.path.join(tempfile.gettempdir(), "monitor.tmp"))
+                        default=os.path.join(tempfile.gettempdir(), "monitor.tmp"),
+                        )
     parser.add_argument("directories",
                         default=[os.getcwd()],
                         nargs='*',
@@ -18,30 +23,36 @@ def main():
     args = parser.parse_args()
 
     temp_file = args.temp_file
-    args.directories = [dir.rstrip('/') for dir in args.directories]
-    args.directories = [os.path.abspath(dir) for dir in args.directories]
+    args.directories = [os.path.abspath(directory) for directory in args.directories]
+
     if os.path.isfile(temp_file):
         with open(temp_file) as f:
             cached_directories = json.load(f)
-        result = process_cached(cached_directories, args.directories)
-        if result:
-            write_json_file(cached_directories, temp_file)
-
     else:
         cached_directories = dict()
-        result = process_non_cached(cached_directories, args.directories)
-        if result:
-            write_json_file(cached_directories, temp_file)
+
+    if args.daemon is True:
+        while True:
+            try:
+                result_cached_directories = process_files(cached_directories, temp_file, args.directories)
+                time.sleep(1)
+            except KeyboardInterrupt:
+                if result_cached_directories[0] is True:
+                    write_json_file(result_cached_directories[1], temp_file)
+                print("\nWriting tmp file to ", temp_file)
+                exit()
+    else:
+        result_cached_directories = process_files(cached_directories, temp_file, args.directories)
+        if result_cached_directories[0] is True:
+            write_json_file(result_cached_directories[1], temp_file)
 
 
-def write_json_file(dictionary, temp_file):
-    cached_directories = dictionary
-    with open(temp_file, "w") as f:
-
-        for directory in cached_directories:
-            # Convert list of processed files to a set
-            cached_directories[directory][1] = list(cached_directories[directory][1])
-        json.dump(cached_directories, f, indent=4, sort_keys=True)
+def process_files(cached_directories, temp_file, directories):
+    if os.path.isfile(temp_file):
+        result = process_cached(cached_directories, directories)
+    else:
+        result = process_non_cached(cached_directories, directories)
+    return (result, cached_directories)
 
 
 def process_non_cached(cache_dictionary, directories):
@@ -82,6 +93,16 @@ def process_cached(cache_dictionary, directories):
                 cache_dictionary[directory][1].add(file)
                 # TODO; add processing of file
             return True
+
+
+def write_json_file(dictionary, temp_file):
+    cached_directories = dictionary
+    with open(temp_file, "w") as f:
+
+        for directory in cached_directories:
+            # Convert list of processed files to a set
+            cached_directories[directory][1] = list(cached_directories[directory][1])
+        json.dump(cached_directories, f, indent=4, sort_keys=True)
 
 
 if __name__ == '__main__':
