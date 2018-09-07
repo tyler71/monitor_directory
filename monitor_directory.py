@@ -25,10 +25,18 @@ def main():
                         )
     args = parser.parse_args()
 
-    script_file = os.path.abspath(args.script[0])
+    # If is file, treat it as a script. If not, run as a command
+    if os.path.isfile(os.path.abspath(args.script[0])):
+        command = os.path.abspath(args.script[0])
+    else:
+        command = args.script[0]
+
     temp_file = args.temp_file
     args.directories = [os.path.abspath(directory) for directory in args.directories]
 
+    # Manage loading of cache_directories.
+    # Used to know when things have been processed or not.
+    # If it doesn't exist, create one
     if os.path.isfile(temp_file):
         with open(temp_file) as f:
             cached_directories = json.load(f)
@@ -42,20 +50,23 @@ def main():
     else:
         cached_directories = dict()
 
+    # Decide to run as daemon or script.
+    # Having updated values will trigger a write to the temporary file
     update_json = False
     if args.daemon is True:
         while True:
             try:
-                result_cached_directories = process_files(script_file, cached_directories, temp_file, args.directories)
+                result_cached_directories = process_files(command, cached_directories, temp_file, args.directories)
                 if result_cached_directories[0] is True:
                     write_json_file(result_cached_directories[1], temp_file)
+                time.sleep(1)
             except KeyboardInterrupt:
                 exit()
             except FileNotFoundError as e:
                 print(e, "was not found, removing from tested entries")
                 # args.directories.remove()
     else:
-        result_cached_directories = process_files(script_file, cached_directories, temp_file, args.directories)
+        result_cached_directories = process_files(command, cached_directories, temp_file, args.directories)
         if result_cached_directories[0] is True:
             update_json = True
         if update_json is True:
@@ -75,9 +86,9 @@ def process_non_cached(command, cache_dictionary, directories):
         cache_dictionary[directory] = [os.stat(directory).st_mtime, set()]
         directory_files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
         for file in directory_files:
-            print("processing non cached", file)
-            subprocess.run([command, os.path.join(directory, file)])
-            # TODO; add processing of file
+            print("processing", file)
+            subprocess.run(command.split(" ") + [os.path.join(directory, file)])
+            # After processing file, cache it
             cache_dictionary[directory][1].add(file)
     return True
 
@@ -96,7 +107,7 @@ def process_cached(command, cache_dictionary, directories):
                 for file in directory_files:
                     if file not in cache_dictionary[directory][1]:
                         print("processing", file)
-                        subprocess.run([command, os.path.join(directory, file)])
+                        subprocess.run(command.split(" ") + [os.path.join(directory, file)])
                         cache_dictionary[directory][1].add(file)
                 return True
         else:
@@ -105,7 +116,7 @@ def process_cached(command, cache_dictionary, directories):
             for file in directory_files:
                 print([command, os.path.join(directory, file)])
                 print("processing", file)
-                subprocess.run([command, os.path.join(directory, file)])
+                subprocess.run(command.split(" ") + [os.path.join(directory, file)])
                 cache_dictionary[directory][1].add(file)
             return True
 
