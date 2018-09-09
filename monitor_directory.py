@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-
 import argparse
 import pathlib
 import json
@@ -11,7 +10,7 @@ import time
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Monitors directory for changes and runs command on new files")
     parser.add_argument("-d", "--daemon",
                         action="store_true",
                         )
