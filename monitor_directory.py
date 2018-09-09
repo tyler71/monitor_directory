@@ -33,7 +33,6 @@ def main():
                         nargs=1,
                         help="Run command or script on each file: ./script file_foobar",
                         )
-
     parser.add_argument("directories",
                         default=[os.getcwd()],
                         nargs='*',
@@ -97,7 +96,6 @@ def main():
 
 def process_files_command(command, cache_dictionary, directories, include=None, exclude=None):
     def run_command(directory, file, command):
-        print("processing", file)
         subprocess.run(command.split(" ") + [os.path.join(directory, file)])
         cache_dictionary[directory][1].add(file)
 
@@ -112,7 +110,9 @@ def process_files_command(command, cache_dictionary, directories, include=None, 
                 if include or exclude:
                     directory_files = file_include_exclude(directory=directory, include=include, exclude=exclude)
                 else:
-                    directory_files = (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
+                    directory_files = (file
+                                       for file in os.listdir(directory)
+                                       if os.path.isfile(os.path.join(directory, file)))
                 # Check to see if the file is in the cache.
                 # Ignore if so.
                 for file in directory_files:
@@ -127,7 +127,9 @@ def process_files_command(command, cache_dictionary, directories, include=None, 
             if include or exclude:
                 directory_files = file_include_exclude(directory=directory, include=include, exclude=exclude)
             else:
-                directory_files = (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
+                directory_files = (file
+                                   for file in os.listdir(directory)
+                                   if os.path.isfile(os.path.join(directory, file)))
             for file in directory_files:
                 run_command(directory, file, command)
             return True
