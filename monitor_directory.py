@@ -58,6 +58,8 @@ def main():
         with open(temp_file) as f:
             cached_directories = json.load(f)
 
+            # --trim option
+            # If the directory isn't specified and is in the cache, remove it
             if args.trim_cache is True:
                 non_existing_directories = list()
                 for directory in cached_directories:
@@ -73,7 +75,7 @@ def main():
     if args.daemon is True:
         while True:
             try:
-                result_cached_directories = files_command_process(command,
+                result_cached_directories = process_files_command(command,
                                                                   cached_directories,
                                                                   args.directories,
                                                                   include=args.include,
@@ -82,9 +84,10 @@ def main():
                     write_json_file(cached_directories, temp_file)
                 time.sleep(1)
             except KeyboardInterrupt:
+                write_json_file(cached_directories, temp_file)
                 break
     else:
-        result_cached_directories = files_command_process(command,
+        result_cached_directories = process_files_command(command,
                                                           cached_directories,
                                                           args.directories,
                                                           include=args.include,
@@ -93,7 +96,12 @@ def main():
             write_json_file(cached_directories, temp_file)
 
 
-def files_command_process(command, cache_dictionary, directories, include=None, exclude=None):
+def process_files_command(command, cache_dictionary, directories, include=None, exclude=None):
+    def run_command(directory, file, command):
+        print("processing", file)
+        subprocess.run(command.split(" ") + [os.path.join(directory, file)])
+        cache_dictionary[directory][1].add(file)
+
     for directory in cache_dictionary:
         # Convert list of processed files to a set
         cache_dictionary[directory][1] = set(cache_dictionary[directory][1])
@@ -105,36 +113,34 @@ def files_command_process(command, cache_dictionary, directories, include=None, 
                 if include or exclude:
                     directory_files = file_include_exclude(directory=directory, include=include, exclude=exclude)
                 else:
-                    directory_files = (f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f)))
-                cache_dictionary[directory][0] = current_directory_time
+                    directory_files = (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
+                # Check to see if the file is in the cache.
+                # Ignore if so.
                 for file in directory_files:
                     if file not in cache_dictionary[directory][1]:
-                        print("processing", file)
-                        subprocess.run(command.split(" ") + [os.path.join(directory, file)])
+                        run_command(directory, file, command)
                         cache_dictionary[directory][1].add(file)
+                cache_dictionary[directory][0] = current_directory_time
+                # Returning True indicates a change occurred. So the cache file should be written.
                 return True
         else:
             cache_dictionary[directory] = [os.stat(directory).st_mtime, set()]
             if include or exclude:
                 directory_files = file_include_exclude(directory=directory, include=include, exclude=exclude)
             else:
-                directory_files = (f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f)))
+                directory_files = (file for file in os.listdir(directory) if os.path.isfile(os.path.join(directory, file)))
             for file in directory_files:
-                print([command, os.path.join(directory, file)])
-                print("processing", file)
-                subprocess.run(command.split(" ") + [os.path.join(directory, file)])
-                cache_dictionary[directory][1].add(file)
+                run_command(directory, file, command)
             return True
 
 
 def write_json_file(dictionary, temp_file):
     cached_directories = dictionary
-    with open(temp_file, "w") as f:
-
+    with open(temp_file, "w") as temp_file_write_object:
         for directory in cached_directories:
             # Convert list of processed files to a set
             cached_directories[directory][1] = list(cached_directories[directory][1])
-        json.dump(cached_directories, f, indent=4, sort_keys=True)
+        json.dump(cached_directories, temp_file_write_object, indent=4, sort_keys=True)
 
 
 def file_include_exclude(*, directory, include, exclude):
